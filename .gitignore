@@ -1,0 +1,39 @@
+# =============================
+# Node / Express Backend
+# =============================
+
+# Node modules
+/node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Debug files
+*.log
+
+# Build output (if any)
+dist/
+
+# PM2 process files
+pids/
+*.pid
+*.seed
+
+# Mac / Windows system files
+.DS_Store
+Thumbs.db
+
+# Coverage reports
+coverage/
+
+# Optional lock files
+/package-lock.json
+/yarn.lock
