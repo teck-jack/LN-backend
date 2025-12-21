@@ -10,7 +10,8 @@ const {
   markNotificationAsRead,
   markAllNotificationsAsRead,
   getProfile,
-  updateProfile
+  updateProfile,
+  updateChecklistProgress
 } = require('../controllers/employeeController');
 const { employeeAuth } = require('../middleware/employeeAuth');
 
@@ -22,6 +23,7 @@ router.get('/dashboard', getDashboard);
 router.get('/cases', getAssignedCases);
 router.get('/cases/:id', getCase);
 router.put('/cases/:id/status', updateCaseStatus);
+router.put('/cases/:id/checklist', updateChecklistProgress);
 router.post('/cases/:id/notes', addNote);
 router.post('/cases/:id/documents', uploadDocument);
 router.get('/notifications', getNotifications);

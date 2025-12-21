@@ -203,39 +203,75 @@ exports.getServices = async (req, res, next) => {
   }
 };
 
-// @desc    Get agent performance report
-// @route   GET /api/agent/reports
-// @access  Private/Agent
+// ✅ @desc    Get single service details by ID
+// ✅ @route   GET /api/agent/services/:id
+// ✅ @access  Private/Agent
+exports.getServiceById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // Validate ObjectId format
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid service ID format'
+      });
+    }
+
+    const service = await Service.findById(id);
+
+    if (!service) {
+      return res.status(404).json({
+        success: false,
+        message: 'Service not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: service
+    });
+  } catch (err) {
+    next(err);
+  }
+};
 exports.getReports = async (req, res, next) => {
   try {
     const agentId = req.user.id;
     const { startDate, endDate } = req.query;
-    
+
     const dateQuery = {};
-    if (startDate && endDate) {
+
+    if (startDate && endDate && !isNaN(new Date(startDate)) && !isNaN(new Date(endDate))) {
       dateQuery.createdAt = {
         $gte: new Date(startDate),
         $lte: new Date(endDate)
       };
     }
-    
-    // Get onboarded users in the date range
-    const onboardedUsers = await User.find({ 
+
+    // Get onboarded users in the date range (if any)
+    const onboardedUsers = await User.find({
       agentId,
       ...dateQuery
     });
-    
-    // Get all onboarded users (for case calculation)
+
     const allOnboardedUsers = await User.find({ agentId });
-    
-    // Get completed cases for onboarded users in the date range
+
+    // ✅ Only apply date range if valid, otherwise skip filter
+    const caseDateFilter =
+      startDate && endDate && !isNaN(new Date(startDate)) && !isNaN(new Date(endDate))
+        ? {
+            completedAt: {
+              $gte: new Date(startDate),
+              $lte: new Date(endDate)
+            }
+          }
+        : {};
+
     const completedCases = await Case.find({
       endUserId: { $in: allOnboardedUsers.map(u => u._id) },
       status: constants.CASE_STATUS.COMPLETED,
-      completedAt: {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate)
-      }
+      ...caseDateFilter
     });
     
     // Get monthly stats for the last 6 months
@@ -285,3 +321,7 @@ exports.getReports = async (req, res, next) => {
     next(err);
   }
 };
+
+
+
+

@@ -41,7 +41,7 @@ exports.getDashboard = async (req, res, next) => {
     for (const employee of employees) {
       const assignedCases = await Case.find({ employeeId: employee._id });
       const workload = calculateEmployeeWorkload(assignedCases);
-      
+
       employeesWithWorkload.push({
         _id: employee._id,
         name: employee.name,
@@ -60,7 +60,7 @@ exports.getDashboard = async (req, res, next) => {
         endUserId: { $in: onboardedUsers.map(u => u._id) },
         status: constants.CASE_STATUS.COMPLETED
       });
-      
+
       agentsWithPerformance.push({
         _id: agent._id,
         name: agent.name,
@@ -75,11 +75,11 @@ exports.getDashboard = async (req, res, next) => {
     const totalRevenue = payments.reduce((sum, payment) => sum + payment.amount, 0);
     const monthlyRevenue = await Payment.aggregate([
       {
-        $match: { 
+        $match: {
           status: 'completed',
-          paymentDate: { 
-            $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) 
-          } 
+          paymentDate: {
+            $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+          }
         }
       },
       {
@@ -114,7 +114,7 @@ exports.getDashboard = async (req, res, next) => {
 exports.getUsers = async (req, res, next) => {
   try {
     const { role, sourceTag, page = 1, limit = 10 } = req.query;
-    
+
     const query = {};
     if (role) query.role = role;
     if (sourceTag) query.sourceTag = sourceTag;
@@ -156,6 +156,41 @@ exports.getUser = async (req, res, next) => {
     }
 
     res.status(200).json({
+      success: true,
+      data: user
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Create user
+// @route   POST /api/admin/users
+// @access  Private/Admin
+exports.createUser = async (req, res, next) => {
+  try {
+    const { name, email, password, phone, role } = req.body;
+
+    // Create user
+    const user = await User.create({
+      name,
+      email,
+      password,
+      phone,
+      role: role || constants.USER_ROLES.END_USER,
+      sourceTag: 'admin_direct'
+    });
+
+    // Create welcome notification
+    await Notification.create({
+      recipientId: user._id,
+      type: constants.NOTIFICATION_TYPES.IN_APP,
+      title: 'Welcome',
+      message: 'Your account has been created successfully.',
+      relatedCaseId: null
+    });
+
+    res.status(201).json({
       success: true,
       data: user
     });
@@ -297,11 +332,11 @@ exports.updateAgent = async (req, res, next) => {
 exports.getCases = async (req, res, next) => {
   try {
     const { status, employeeId, agentId, page = 1, limit = 10 } = req.query;
-    
+
     const query = {};
     if (status) query.status = status;
     if (employeeId) query.employeeId = employeeId;
-    
+
     // If agentId is provided, find cases for users onboarded by that agent
     if (agentId) {
       const onboardedUsers = await User.find({ agentId });
@@ -414,11 +449,11 @@ exports.autoAssignCases = async (req, res, next) => {
   try {
     // Get all unassigned cases
     const unassignedCases = await Case.find({ employeeId: null });
-    
+
     // Get all active employees
-    const employees = await User.find({ 
-      role: constants.USER_ROLES.EMPLOYEE, 
-      isActive: true 
+    const employees = await User.find({
+      role: constants.USER_ROLES.EMPLOYEE,
+      isActive: true
     });
 
     if (unassignedCases.length === 0 || employees.length === 0) {
@@ -433,7 +468,7 @@ exports.autoAssignCases = async (req, res, next) => {
     for (const employee of employees) {
       const assignedCases = await Case.find({ employeeId: employee._id });
       const workload = calculateEmployeeWorkload(assignedCases);
-      
+
       employeesWithWorkload.push({
         _id: employee._id,
         workload: workload.total
@@ -449,11 +484,11 @@ exports.autoAssignCases = async (req, res, next) => {
       const caseItem = unassignedCases[i];
       const employeeIndex = i % employeesWithWorkload.length;
       const employeeId = employeesWithWorkload[employeeIndex]._id;
-      
+
       caseItem.employeeId = employeeId;
       caseItem.assignedAt = Date.now();
       await caseItem.save();
-      
+
       // Create notification for employee
       await Notification.create({
         recipientId: employeeId,
@@ -462,7 +497,7 @@ exports.autoAssignCases = async (req, res, next) => {
         message: `A new case (${caseItem.caseId}) has been assigned to you.`,
         relatedCaseId: caseItem._id
       });
-      
+
       assignedCases.push(caseItem);
     }
 
@@ -542,7 +577,7 @@ exports.getServices = async (req, res, next) => {
 exports.getReports = async (req, res, next) => {
   try {
     const { type, startDate, endDate } = req.query;
-    
+
     let matchQuery = {};
     if (startDate && endDate) {
       matchQuery.createdAt = {
@@ -567,7 +602,7 @@ exports.getReports = async (req, res, next) => {
           { $sort: { _id: 1 } }
         ]);
         break;
-      
+
       case 'cases':
         reportData = await Case.aggregate([
           { $match: matchQuery },
@@ -579,10 +614,10 @@ exports.getReports = async (req, res, next) => {
           }
         ]);
         break;
-      
+
       case 'agent-performance':
         const agents = await User.find({ role: constants.USER_ROLES.AGENT });
-        
+
         for (const agent of agents) {
           const onboardedUsers = await User.find({ agentId: agent._id });
           const completedCases = await Case.find({
@@ -590,7 +625,7 @@ exports.getReports = async (req, res, next) => {
             status: constants.CASE_STATUS.COMPLETED,
             ...matchQuery
           });
-          
+
           reportData.push({
             agent: {
               _id: agent._id,
@@ -599,22 +634,22 @@ exports.getReports = async (req, res, next) => {
             },
             onboardedUsers: onboardedUsers.length,
             completedCases: completedCases.length,
-            conversionRate: onboardedUsers.length > 0 
-              ? Math.round((completedCases.length / onboardedUsers.length) * 100) 
+            conversionRate: onboardedUsers.length > 0
+              ? Math.round((completedCases.length / onboardedUsers.length) * 100)
               : 0
           });
         }
         break;
-      
+
       case 'employee-performance':
         const employees = await User.find({ role: constants.USER_ROLES.EMPLOYEE });
-        
+
         for (const employee of employees) {
-          const assignedCases = await Case.find({ 
+          const assignedCases = await Case.find({
             employeeId: employee._id,
             ...matchQuery
           });
-          
+
           reportData.push({
             employee: {
               _id: employee._id,
@@ -623,16 +658,16 @@ exports.getReports = async (req, res, next) => {
             },
             totalCases: assignedCases.length,
             completedCases: assignedCases.filter(c => c.status === constants.CASE_STATUS.COMPLETED).length,
-            avgCompletionTime: assignedCases.length > 0 
+            avgCompletionTime: assignedCases.length > 0
               ? Math.round(assignedCases
-                  .filter(c => c.status === constants.CASE_STATUS.COMPLETED && c.completedAt && c.assignedAt)
-                  .reduce((sum, c) => sum + (c.completedAt - c.assignedAt), 0) / 
-                  assignedCases.filter(c => c.status === constants.CASE_STATUS.COMPLETED && c.completedAt && c.assignedAt).length / (1000 * 60 * 60 * 24))
+                .filter(c => c.status === constants.CASE_STATUS.COMPLETED && c.completedAt && c.assignedAt)
+                .reduce((sum, c) => sum + (c.completedAt - c.assignedAt), 0) /
+                assignedCases.filter(c => c.status === constants.CASE_STATUS.COMPLETED && c.completedAt && c.assignedAt).length / (1000 * 60 * 60 * 24))
               : 0
           });
         }
         break;
-      
+
       default:
         return res.status(400).json({
           success: false,

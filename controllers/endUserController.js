@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const ActivityTimeline = require('../models/ActivityTimeline');
 const Case = require('../models/Case');
 const Service = require('../models/Service');
 const Payment = require('../models/Payment');
@@ -12,24 +13,24 @@ const constants = require('../utils/constants');
 exports.getDashboard = async (req, res, next) => {
   try {
     const endUserId = req.user.id;
-    
+
     // Get user's cases
     const cases = await Case.find({ endUserId })
       .populate('serviceId', 'name type')
       .sort({ updatedAt: -1 });
-    
+
     // Get unread notifications
     const unreadNotifications = await Notification.find({
       recipientId: endUserId,
       isRead: false
     }).sort({ createdAt: -1 });
-    
+
     // Get payment history
     const payments = await Payment.find({
       caseId: { $in: cases.map(c => c._id) },
       status: 'completed'
     }).sort({ paymentDate: -1 }).limit(5);
-    
+
     res.status(200).json({
       success: true,
       data: {
@@ -49,7 +50,7 @@ exports.getDashboard = async (req, res, next) => {
 exports.getServices = async (req, res, next) => {
   try {
     const services = await Service.find({ isActive: true }).sort({ name: 1 });
-    
+
     res.status(200).json({
       success: true,
       count: services.length,
@@ -66,14 +67,14 @@ exports.getServices = async (req, res, next) => {
 exports.getService = async (req, res, next) => {
   try {
     const service = await Service.findById(req.params.id);
-    
+
     if (!service) {
       return res.status(404).json({
         success: false,
         error: 'Service not found'
       });
     }
-    
+
     res.status(200).json({
       success: true,
       data: service
@@ -89,19 +90,19 @@ exports.getService = async (req, res, next) => {
 exports.createPaymentOrder = async (req, res, next) => {
   try {
     const { serviceId } = req.body;
-    
+
     const service = await Service.findById(serviceId);
-    
+
     if (!service) {
       return res.status(404).json({
         success: false,
         error: 'Service not found'
       });
     }
-    
+
     // Create order with Razorpay
     const order = await createOrder(service.price);
-    
+
     res.status(200).json({
       success: true,
       data: {
@@ -119,44 +120,45 @@ exports.createPaymentOrder = async (req, res, next) => {
 // @access  Private/End User
 exports.verifyPayment = async (req, res, next) => {
   try {
-    const { 
-      razorpay_order_id, 
-      razorpay_payment_id, 
-      razorpay_signature, 
-      serviceId 
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      serviceId
     } = req.body;
-    
+
     const service = await Service.findById(serviceId);
-    
+
     if (!service) {
       return res.status(404).json({
         success: false,
         error: 'Service not found'
       });
     }
-    
+
     // Verify payment
     const isValid = verifyPayment({
       razorpay_order_id,
       razorpay_payment_id,
       razorpay_signature
     });
-    
+
     if (!isValid) {
       return res.status(400).json({
         success: false,
         error: 'Invalid payment'
       });
     }
-    
+
     // Create case
     const caseItem = await Case.create({
       caseId: `CASE-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`.toUpperCase(),
       endUserId: req.user.id,
       serviceId,
-      status: constants.CASE_STATUS.NEW
+      status: constants.CASE_STATUS.NEW,
+      deadline: new Date(Date.now() + (service.slaHours || 24) * 60 * 60 * 1000)
     });
-    
+
     // Create payment record
     const payment = await Payment.create({
       caseId: caseItem._id,
@@ -165,10 +167,10 @@ exports.verifyPayment = async (req, res, next) => {
       paymentMethod: 'razorpay',
       status: 'completed'
     });
-    
+
     // Create notification for admin
     const admins = await User.find({ role: constants.USER_ROLES.ADMIN });
-    
+
     for (const admin of admins) {
       await Notification.create({
         recipientId: admin._id,
@@ -178,7 +180,7 @@ exports.verifyPayment = async (req, res, next) => {
         relatedCaseId: caseItem._id
       });
     }
-    
+
     // Create notification for end user
     await Notification.create({
       recipientId: req.user.id,
@@ -187,7 +189,7 @@ exports.verifyPayment = async (req, res, next) => {
       message: `Your case for ${service.name} has been created successfully.`,
       relatedCaseId: caseItem._id
     });
-    
+
     res.status(201).json({
       success: true,
       data: {
@@ -207,19 +209,19 @@ exports.getCases = async (req, res, next) => {
   try {
     const endUserId = req.user.id;
     const { status, page = 1, limit = 10 } = req.query;
-    
+
     const query = { endUserId };
     if (status) query.status = status;
-    
+
     const cases = await Case.find(query)
       .populate('serviceId', 'name type')
       .populate('employeeId', 'name email')
       .skip((page - 1) * limit)
       .limit(parseInt(limit))
       .sort({ createdAt: -1 });
-    
+
     const total = await Case.countDocuments(query);
-    
+
     res.status(200).json({
       success: true,
       count: cases.length,
@@ -244,14 +246,14 @@ exports.getCase = async (req, res, next) => {
       .populate('serviceId', 'name type processSteps')
       .populate('employeeId', 'name email')
       .populate('notes.createdBy', 'name role');
-    
+
     if (!caseItem) {
       return res.status(404).json({
         success: false,
         error: 'Case not found'
       });
     }
-    
+
     // Check if case belongs to current user
     if (caseItem.endUserId.toString() !== req.user.id) {
       return res.status(403).json({
@@ -259,7 +261,7 @@ exports.getCase = async (req, res, next) => {
         error: 'Not authorized to access this case'
       });
     }
-    
+
     res.status(200).json({
       success: true,
       data: caseItem
@@ -275,16 +277,16 @@ exports.getCase = async (req, res, next) => {
 exports.addNote = async (req, res, next) => {
   try {
     const { text } = req.body;
-    
+
     const caseItem = await Case.findById(req.params.id);
-    
+
     if (!caseItem) {
       return res.status(404).json({
         success: false,
         error: 'Case not found'
       });
     }
-    
+
     // Check if case belongs to current user
     if (caseItem.endUserId.toString() !== req.user.id) {
       return res.status(403).json({
@@ -292,29 +294,21 @@ exports.addNote = async (req, res, next) => {
         error: 'Not authorized to update this case'
       });
     }
-    
-    // Add note
+
+    // Add note with required createdBy field
     caseItem.notes.push({
       text,
-      createdBy: req.user.id
+      createdBy: req.user.id  // Add the current user as the creator
     });
-    
+
+    // Save the case with the new note
     await caseItem.save();
-    
-    // Create notification for assigned employee
-    if (caseItem.employeeId) {
-      const service = await Service.findById(caseItem.serviceId);
-      
-      await Notification.create({
-        recipientId: caseItem.employeeId,
-        type: constants.NOTIFICATION_TYPES.IN_APP,
-        title: 'New Note Added',
-        message: `A new note has been added to case ${caseItem.caseId} for ${service.name}.`,
-        relatedCaseId: caseItem._id
-      });
-    }
-    
-    res.status(200).json({
+
+    // Update last activity timestamp
+    await caseItem.updateActivity();
+
+    // Return the updated case
+    res.status(201).json({
       success: true,
       data: caseItem
     });
@@ -331,16 +325,16 @@ exports.uploadDocument = async (req, res, next) => {
     // This would typically use multer for file upload
     // For simplicity, we'll assume the file has been uploaded and we have the URL
     const { name, url } = req.body;
-    
+
     const caseItem = await Case.findById(req.params.id);
-    
+
     if (!caseItem) {
       return res.status(404).json({
         success: false,
         error: 'Case not found'
       });
     }
-    
+
     // Check if case belongs to current user
     if (caseItem.endUserId.toString() !== req.user.id) {
       return res.status(403).json({
@@ -348,20 +342,20 @@ exports.uploadDocument = async (req, res, next) => {
         error: 'Not authorized to update this case'
       });
     }
-    
+
     // Add document
     caseItem.documents.push({
       name,
       url,
       uploadedBy: req.user.id
     });
-    
+
     await caseItem.save();
-    
+
     // Create notification for assigned employee
     if (caseItem.employeeId) {
       const service = await Service.findById(caseItem.serviceId);
-      
+
       await Notification.create({
         recipientId: caseItem.employeeId,
         type: constants.NOTIFICATION_TYPES.IN_APP,
@@ -370,7 +364,7 @@ exports.uploadDocument = async (req, res, next) => {
         relatedCaseId: caseItem._id
       });
     }
-    
+
     res.status(200).json({
       success: true,
       data: caseItem
@@ -387,10 +381,10 @@ exports.getPayments = async (req, res, next) => {
   try {
     const endUserId = req.user.id;
     const { page = 1, limit = 10 } = req.query;
-    
+
     // Get user's cases
     const cases = await Case.find({ endUserId });
-    
+
     const payments = await Payment.find({
       caseId: { $in: cases.map(c => c._id) }
     })
@@ -398,11 +392,11 @@ exports.getPayments = async (req, res, next) => {
       .skip((page - 1) * limit)
       .limit(parseInt(limit))
       .sort({ paymentDate: -1 });
-    
+
     const total = await Payment.countDocuments({
       caseId: { $in: cases.map(c => c._id) }
     });
-    
+
     res.status(200).json({
       success: true,
       count: payments.length,
@@ -425,18 +419,18 @@ exports.getNotifications = async (req, res, next) => {
   try {
     const endUserId = req.user.id;
     const { page = 1, limit = 10, isRead } = req.query;
-    
+
     const query = { recipientId: endUserId };
     if (isRead !== undefined) query.isRead = isRead === 'true';
-    
+
     const notifications = await Notification.find(query)
       .populate('relatedCaseId', 'caseId')
       .skip((page - 1) * limit)
       .limit(parseInt(limit))
       .sort({ createdAt: -1 });
-    
+
     const total = await Notification.countDocuments(query);
-    
+
     res.status(200).json({
       success: true,
       count: notifications.length,
@@ -458,14 +452,14 @@ exports.getNotifications = async (req, res, next) => {
 exports.markNotificationAsRead = async (req, res, next) => {
   try {
     const notification = await Notification.findById(req.params.id);
-    
+
     if (!notification) {
       return res.status(404).json({
         success: false,
         error: 'Notification not found'
       });
     }
-    
+
     // Check if notification belongs to current user
     if (notification.recipientId.toString() !== req.user.id) {
       return res.status(403).json({
@@ -473,10 +467,10 @@ exports.markNotificationAsRead = async (req, res, next) => {
         error: 'Not authorized to update this notification'
       });
     }
-    
+
     notification.isRead = true;
     await notification.save();
-    
+
     res.status(200).json({
       success: true,
       data: notification
@@ -492,12 +486,12 @@ exports.markNotificationAsRead = async (req, res, next) => {
 exports.markAllNotificationsAsRead = async (req, res, next) => {
   try {
     const endUserId = req.user.id;
-    
+
     await Notification.updateMany(
       { recipientId: endUserId, isRead: false },
       { isRead: true }
     );
-    
+
     res.status(200).json({
       success: true,
       message: 'All notifications marked as read'
@@ -513,7 +507,7 @@ exports.markAllNotificationsAsRead = async (req, res, next) => {
 exports.getProfile = async (req, res, next) => {
   try {
     const user = await User.findById(req.user.id);
-    
+
     res.status(200).json({
       success: true,
       data: user
@@ -529,16 +523,50 @@ exports.getProfile = async (req, res, next) => {
 exports.updateProfile = async (req, res, next) => {
   try {
     const { name, email, phone } = req.body;
-    
+
     const user = await User.findByIdAndUpdate(
       req.user.id,
       { name, email, phone },
       { new: true, runValidators: true }
     );
-    
+
     res.status(200).json({
       success: true,
       data: user
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Get case timeline
+// @route   GET /api/enduser/cases/:id/timeline
+// @access  Private/End User
+exports.getTimeline = async (req, res, next) => {
+  try {
+    const caseItem = await Case.findById(req.params.id);
+
+    if (!caseItem) {
+      return res.status(404).json({
+        success: false,
+        error: 'Case not found'
+      });
+    }
+
+    // Check if case belongs to current user
+    if (caseItem.endUserId.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        error: 'Not authorized to access this case'
+      });
+    }
+
+    const timeline = await ActivityTimeline.getTimeline(caseItem._id, true, req.query);
+
+    res.status(200).json({
+      success: true,
+      count: timeline.length,
+      data: timeline
     });
   } catch (err) {
     next(err);

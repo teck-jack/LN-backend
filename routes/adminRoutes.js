@@ -3,6 +3,7 @@ const {
   getDashboard,
   getUsers,
   getUser,
+  createUser,
   createEmployee,
   updateEmployee,
   createAgent,
@@ -24,6 +25,7 @@ router.use(adminAuth);
 
 router.get('/dashboard', getDashboard);
 router.get('/users', getUsers);
+router.post('/users', createUser);
 router.get('/users/:id', getUser);
 router.post('/employees', createEmployee);
 router.put('/employees/:id', updateEmployee);
