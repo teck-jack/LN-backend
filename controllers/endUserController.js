@@ -101,7 +101,8 @@ exports.createPaymentOrder = async (req, res, next) => {
     }
 
     // Create order with Razorpay
-    const order = await createOrder(service.price);
+    const { isTestMode } = req.body;
+    const order = await createOrder(service.price, isTestMode);
 
     res.status(200).json({
       success: true,
@@ -137,11 +138,12 @@ exports.verifyPayment = async (req, res, next) => {
     }
 
     // Verify payment
-    const isValid = verifyPayment({
+    const { isTestMode } = req.body;
+    const isValid = await verifyPayment({
       razorpay_order_id,
       razorpay_payment_id,
       razorpay_signature
-    });
+    }, isTestMode);
 
     if (!isValid) {
       return res.status(400).json({
