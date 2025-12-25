@@ -35,6 +35,7 @@ const auditLogRoutes = require('./routes/auditLogRoutes');
 const notificationTemplateRoutes = require('./routes/notificationTemplateRoutes');
 const internalNoteRoutes = require('./routes/internalNoteRoutes');
 const cannedResponseRoutes = require('./routes/cannedResponseRoutes');
+const contactQueryRoutes = require('./routes/contactQueryRoutes');
 
 // Mount routers
 app.use('/api/auth', authRoutes);
@@ -49,6 +50,7 @@ app.use('/api/admin/audit-logs', auditLogRoutes);
 app.use('/api/admin/notification-templates', notificationTemplateRoutes);
 app.use('/api/employee', internalNoteRoutes);
 app.use('/api/employee/canned-responses', cannedResponseRoutes);
+app.use('/api/contact', contactQueryRoutes);
 
 
 // Health check route

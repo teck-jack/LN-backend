@@ -162,7 +162,7 @@ exports.updateCaseStatus = async (req, res, next) => {
       recipientId: caseItem.endUserId,
       type: constants.NOTIFICATION_TYPES.IN_APP,
       title: `Case ${statusText}`,
-      message: `Your case for ${service.name} has been ${statusText}.`,
+      message: `Your case for ${service ? service.name : 'Service'} has been ${statusText}.`,
       relatedCaseId: caseItem._id
     });
 
@@ -214,7 +214,7 @@ exports.addNote = async (req, res, next) => {
       recipientId: caseItem.endUserId,
       type: constants.NOTIFICATION_TYPES.IN_APP,
       title: 'New Note Added',
-      message: `A new note has been added to your case for ${service.name}.`,
+      message: `A new note has been added to your case for ${service ? service.name : 'Service'}.`,
       relatedCaseId: caseItem._id
     });
 
@@ -269,7 +269,7 @@ exports.uploadDocument = async (req, res, next) => {
       recipientId: caseItem.endUserId,
       type: constants.NOTIFICATION_TYPES.IN_APP,
       title: 'Document Uploaded',
-      message: `A document has been uploaded to your case for ${service.name}.`,
+      message: `A document has been uploaded to your case for ${service ? service.name : 'Service'}.`,
       relatedCaseId: caseItem._id
     });
 
