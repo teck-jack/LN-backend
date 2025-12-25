@@ -15,7 +15,10 @@ const {
   createService,
   updateService,
   getServices,
-  getReports
+  getReports,
+  getRequiredDocuments,
+  addNote,
+  getTimeline
 } = require('../controllers/adminController');
 const { adminAuth } = require('../middleware/adminAuth');
 
@@ -33,6 +36,9 @@ router.post('/agents', createAgent);
 router.put('/agents/:id', updateAgent);
 router.get('/cases', getCases);
 router.get('/cases/:id', getCase);
+router.get('/cases/:id/required-documents', getRequiredDocuments);
+router.post('/cases/:id/notes', addNote);
+router.get('/cases/:id/timeline', getTimeline);
 router.put('/cases/:id/assign', assignCase);
 router.post('/cases/auto-assign', autoAssignCases);
 router.post('/services', createService);

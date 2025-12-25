@@ -7,7 +7,8 @@ const {
     deleteVersion,
     restoreVersion,
     verifyDocument,
-    uploadMiddleware
+    uploadMiddleware,
+    getDocumentStatus
 } = require('../controllers/documentVersionController');
 const { protect } = require('../middleware/auth');
 
@@ -31,5 +32,8 @@ router.post('/version/:versionId/restore', restoreVersion);
 
 // Verify document (admin/employee only)
 router.put('/version/:versionId/verify', verifyDocument);
+
+// Get document status for a case
+router.get('/:caseId/status', getDocumentStatus);
 
 module.exports = router;

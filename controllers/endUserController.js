@@ -4,6 +4,7 @@ const Case = require('../models/Case');
 const Service = require('../models/Service');
 const Payment = require('../models/Payment');
 const Notification = require('../models/Notification');
+const DocumentVersion = require('../models/DocumentVersion');
 const { createOrder, verifyPayment } = require('../services/paymentService');
 const constants = require('../utils/constants');
 
@@ -535,6 +536,56 @@ exports.updateProfile = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: user
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Get required documents for a case with upload status
+// @route   GET /api/enduser/cases/:id/required-documents
+// @access  Private/End User
+exports.getRequiredDocuments = async (req, res, next) => {
+  try {
+    const caseItem = await Case.findById(req.params.id)
+      .populate('serviceId');
+
+    if (!caseItem) {
+      return res.status(404).json({
+        success: false,
+        error: 'Case not found'
+      });
+    }
+
+    // Check if case belongs to current user
+    if (caseItem.endUserId.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        error: 'Not authorized to access this case'
+      });
+    }
+
+    const service = caseItem.serviceId;
+
+    // Check if service has documentsRequired defined
+    if (!service.documentsRequired || service.documentsRequired.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: [],
+        message: 'No required documents defined for this service'
+      });
+    }
+
+    // Get document status using the static method
+    const documentStatus = await DocumentVersion.getDocumentStatus(
+      caseItem._id,
+      service.documentsRequired
+    );
+
+    res.status(200).json({
+      success: true,
+      count: documentStatus.length,
+      data: documentStatus
     });
   } catch (err) {
     next(err);

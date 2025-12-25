@@ -110,4 +110,49 @@ documentVersionSchema.methods.markPreviousAsSuperseded = async function () {
     );
 };
 
+// Method to get document status for a case based on required document names
+documentVersionSchema.statics.getDocumentStatus = async function (caseId, documentsRequired) {
+    const DocumentVersion = this;
+
+    // Get all active documents for this case
+    const uploadedDocuments = await DocumentVersion.find({
+        caseId,
+        status: 'active'
+    })
+        .populate('uploadedBy.userId', 'name email')
+        .populate('verifiedBy', 'name email')
+        .sort({ version: -1 });
+
+    // Create a map of document types to their latest versions
+    const documentMap = {};
+    uploadedDocuments.forEach(doc => {
+        if (!documentMap[doc.documentType]) {
+            documentMap[doc.documentType] = doc;
+        }
+    });
+
+    // Build status array based on required document names
+    const statusArray = documentsRequired.map(docName => {
+        const uploadedDoc = documentMap[docName];
+
+        return {
+            documentName: docName,
+            isUploaded: !!uploadedDoc,
+            latestVersion: uploadedDoc ? {
+                version: uploadedDoc.version,
+                fileUrl: uploadedDoc.fileUrl,
+                uploadedAt: uploadedDoc.createdAt,
+                uploadedBy: uploadedDoc.uploadedBy,
+                verificationStatus: uploadedDoc.verificationStatus,
+                verifiedBy: uploadedDoc.verifiedBy,
+                verifiedAt: uploadedDoc.verifiedAt,
+                rejectionReason: uploadedDoc.rejectionReason,
+                metadata: uploadedDoc.metadata
+            } : null
+        };
+    });
+
+    return statusArray;
+};
+
 module.exports = mongoose.model('DocumentVersion', documentVersionSchema);

@@ -54,33 +54,7 @@ const ServiceSchema = new mongoose.Schema({
     type: mongoose.Schema.ObjectId,
     ref: 'WorkflowTemplate',
     default: null
-  },
-  requiredDocumentTypes: [{
-    documentType: {
-      type: String,
-      required: true,
-      enum: [
-        'identity_proof',
-        'address_proof',
-        'business_registration',
-        'trademark_logo',
-        'copyright_work',
-        'supporting_document',
-        'other'
-      ]
-    },
-    displayName: {
-      type: String,
-      required: true
-    },
-    isOptional: {
-      type: Boolean,
-      default: false
-    },
-    description: {
-      type: String
-    }
-  }]
+  }
 });
 
 // Virtual for default workflow template

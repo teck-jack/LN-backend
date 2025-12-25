@@ -2,6 +2,7 @@ const User = require('../models/User');
 const Case = require('../models/Case');
 const Service = require('../models/Service');
 const Notification = require('../models/Notification');
+const DocumentVersion = require('../models/DocumentVersion');
 const constants = require('../utils/constants');
 const { calculateEmployeeWorkload } = require('../utils/helpers');
 
@@ -86,7 +87,8 @@ exports.getCase = async (req, res, next) => {
   try {
     const caseItem = await Case.findById(req.params.id)
       .populate('endUserId', 'name email phone')
-      .populate('serviceId', 'name type processSteps')
+      .populate('serviceId', 'name type processSteps documentsRequired')
+      .populate('employeeId', 'name email')
       .populate('workflowTemplate')
       .populate('notes.createdBy', 'name role');
 
@@ -98,7 +100,7 @@ exports.getCase = async (req, res, next) => {
     }
 
     // Check if case is assigned to current employee
-    if (caseItem.employeeId.toString() !== req.user.id) {
+    if (caseItem.employeeId._id.toString() !== req.user.id) {
       return res.status(403).json({
         success: false,
         error: 'Not authorized to access this case'
@@ -469,3 +471,98 @@ exports.updateChecklistProgress = async (req, res, next) => {
     next(err);
   }
 };
+
+// @desc    Get required documents for a case with upload status
+// @route   GET /api/employee/cases/:id/required-documents
+// @access  Private/Employee
+exports.getRequiredDocuments = async (req, res, next) => {
+  try {
+    const caseItem = await Case.findById(req.params.id)
+      .populate('serviceId');
+
+    if (!caseItem) {
+      return res.status(404).json({
+        success: false,
+        error: 'Case not found'
+      });
+    }
+
+    // Check if case is assigned to current employee (admins can access any case)
+    // Handle both populated and non-populated employeeId
+    if (req.user.role !== 'admin') {
+      const employeeIdStr = caseItem.employeeId?._id ? caseItem.employeeId._id.toString() : caseItem.employeeId?.toString();
+      if (employeeIdStr !== req.user.id) {
+        return res.status(403).json({
+          success: false,
+          error: 'Not authorized to access this case'
+        });
+      }
+    }
+
+    const service = caseItem.serviceId;
+
+    // Check if service has documentsRequired defined
+    if (!service.documentsRequired || service.documentsRequired.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: [],
+        message: 'No required documents defined for this service'
+      });
+    }
+
+    // Get document status using the static method
+    const documentStatus = await DocumentVersion.getDocumentStatus(
+      caseItem._id,
+      service.documentsRequired
+    );
+
+    res.status(200).json({
+      success: true,
+      count: documentStatus.length,
+      data: documentStatus
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Get case timeline
+// @route   GET /api/employee/cases/:id/timeline
+// @access  Private/Employee
+exports.getTimeline = async (req, res, next) => {
+  try {
+    const ActivityTimeline = require('../models/ActivityTimeline');
+
+    const caseItem = await Case.findById(req.params.id);
+
+    if (!caseItem) {
+      return res.status(404).json({
+        success: false,
+        error: 'Case not found'
+      });
+    }
+
+    // Check if case is assigned to current employee (admins can access any case)
+    // Handle both populated and non-populated employeeId
+    if (req.user.role !== 'admin') {
+      const employeeIdStr = caseItem.employeeId?._id ? caseItem.employeeId._id.toString() : caseItem.employeeId?.toString();
+      if (employeeIdStr !== req.user.id) {
+        return res.status(403).json({
+          success: false,
+          error: 'Not authorized to access this case'
+        });
+      }
+    }
+
+    const timeline = await ActivityTimeline.getTimeline(caseItem._id, false, req.query);
+
+    res.status(200).json({
+      success: true,
+      count: timeline.length,
+      data: timeline
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+

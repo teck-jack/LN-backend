@@ -15,7 +15,8 @@ const {
   markAllNotificationsAsRead,
   getProfile,
   updateProfile,
-  getTimeline
+  getTimeline,
+  getRequiredDocuments
 } = require('../controllers/endUserController');
 const { endUserAuth } = require('../middleware/endUserAuth');
 
@@ -31,6 +32,7 @@ router.post('/payment/verify', verifyPayment);
 router.get('/cases', getCases);
 router.get('/cases/:id', getCase);
 router.get('/cases/:id/timeline', getTimeline);
+router.get('/cases/:id/required-documents', getRequiredDocuments);
 router.post('/cases/:id/notes', addNote);
 router.post('/cases/:id/documents', uploadDocument);
 router.get('/payments', getPayments);

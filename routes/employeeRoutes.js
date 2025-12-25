@@ -11,7 +11,9 @@ const {
   markAllNotificationsAsRead,
   getProfile,
   updateProfile,
-  updateChecklistProgress
+  updateChecklistProgress,
+  getRequiredDocuments,
+  getTimeline
 } = require('../controllers/employeeController');
 const { employeeAuth } = require('../middleware/employeeAuth');
 
@@ -22,6 +24,8 @@ router.use(employeeAuth);
 router.get('/dashboard', getDashboard);
 router.get('/cases', getAssignedCases);
 router.get('/cases/:id', getCase);
+router.get('/cases/:id/required-documents', getRequiredDocuments);
+router.get('/cases/:id/timeline', getTimeline);
 router.put('/cases/:id/status', updateCaseStatus);
 router.put('/cases/:id/checklist', updateChecklistProgress);
 router.post('/cases/:id/notes', addNote);

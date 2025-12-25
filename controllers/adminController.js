@@ -3,6 +3,7 @@ const Service = require('../models/Service');
 const Case = require('../models/Case');
 const Payment = require('../models/Payment');
 const Notification = require('../models/Notification');
+const DocumentVersion = require('../models/DocumentVersion');
 const constants = require('../utils/constants');
 const { calculateEmployeeWorkload } = require('../utils/helpers');
 
@@ -376,7 +377,7 @@ exports.getCase = async (req, res, next) => {
     const caseItem = await Case.findById(req.params.id)
       .populate('endUserId', 'name email phone')
       .populate('employeeId', 'name email')
-      .populate('serviceId', 'name type processSteps')
+      .populate('serviceId', 'name type processSteps documentsRequired')
       .populate('notes.createdBy', 'name role');
 
     if (!caseItem) {
@@ -678,6 +679,120 @@ exports.getReports = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: reportData
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Get required documents for a case with upload status
+// @route   GET /api/admin/cases/:id/required-documents
+// @access  Private/Admin
+exports.getRequiredDocuments = async (req, res, next) => {
+  try {
+    const caseItem = await Case.findById(req.params.id)
+      .populate('serviceId');
+
+    if (!caseItem) {
+      return res.status(404).json({
+        success: false,
+        error: 'Case not found'
+      });
+    }
+
+    const service = caseItem.serviceId;
+
+    // Check if service has documentsRequired defined
+    if (!service.documentsRequired || service.documentsRequired.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: [],
+        message: 'No required documents defined for this service'
+      });
+    }
+
+    // Get document status using the static method
+    const documentStatus = await DocumentVersion.getDocumentStatus(
+      caseItem._id,
+      service.documentsRequired
+    );
+
+    res.status(200).json({
+      success: true,
+      count: documentStatus.length,
+      data: documentStatus
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Add note to case
+// @route   POST /api/admin/cases/:id/notes
+// @access  Private/Admin
+exports.addNote = async (req, res, next) => {
+  try {
+    const { text } = req.body;
+
+    const caseItem = await Case.findById(req.params.id);
+
+    if (!caseItem) {
+      return res.status(404).json({
+        success: false,
+        error: 'Case not found'
+      });
+    }
+
+    // Add note
+    caseItem.notes.push({
+      text,
+      createdBy: req.user.id
+    });
+
+    await caseItem.save();
+
+    // Create notification for end user
+    const service = await Service.findById(caseItem.serviceId);
+
+    await Notification.create({
+      recipientId: caseItem.endUserId,
+      type: constants.NOTIFICATION_TYPES.IN_APP,
+      title: 'New Note Added',
+      message: `An admin has added a note to your case for ${service.name}.`,
+      relatedCaseId: caseItem._id
+    });
+
+    res.status(200).json({
+      success: true,
+      data: caseItem
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Get case timeline
+// @route   GET /api/admin/cases/:id/timeline
+// @access  Private/Admin
+exports.getTimeline = async (req, res, next) => {
+  try {
+    const ActivityTimeline = require('../models/ActivityTimeline');
+
+    const caseItem = await Case.findById(req.params.id);
+
+    if (!caseItem) {
+      return res.status(404).json({
+        success: false,
+        error: 'Case not found'
+      });
+    }
+
+    const timeline = await ActivityTimeline.getTimeline(caseItem._id, false, req.query);
+
+    res.status(200).json({
+      success: true,
+      count: timeline.length,
+      data: timeline
     });
   } catch (err) {
     next(err);

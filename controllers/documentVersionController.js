@@ -26,7 +26,7 @@ exports.uploadVersion = async (req, res, next) => {
         const { caseId, documentType, notes } = req.body;
 
         // Check if case exists
-        const caseItem = await Case.findById(caseId);
+        const caseItem = await Case.findById(caseId).populate('serviceId');
         if (!caseItem) {
             return res.status(404).json({
                 success: false,
@@ -44,6 +44,18 @@ exports.uploadVersion = async (req, res, next) => {
                 success: false,
                 error: 'Not authorized to upload documents for this case'
             });
+        }
+
+        // Validate document type against service's required documents
+        const service = caseItem.serviceId;
+        if (service.documentsRequired && service.documentsRequired.length > 0) {
+            if (!service.documentsRequired.includes(documentType)) {
+                return res.status(400).json({
+                    success: false,
+                    error: `Invalid document type. Allowed documents for this service are: ${service.documentsRequired.join(', ')}`,
+                    allowedDocuments: service.documentsRequired
+                });
+            }
         }
 
         if (!req.file) {
@@ -451,6 +463,75 @@ exports.verifyDocument = async (req, res, next) => {
         res.status(200).json({
             success: true,
             data: version
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+// @desc    Get document status for a case
+// @route   GET /api/documents/:caseId/status
+// @access  Private
+exports.getDocumentStatus = async (req, res, next) => {
+    try {
+        const { caseId } = req.params;
+
+        // Check if case exists and user has access
+        const caseItem = await Case.findById(caseId).populate('serviceId');
+        if (!caseItem) {
+            return res.status(404).json({
+                success: false,
+                error: 'Case not found'
+            });
+        }
+
+        const isAuthorized =
+            req.user.role === 'admin' ||
+            (req.user.role === 'end_user' && caseItem.endUserId.toString() === req.user.id) ||
+            (req.user.role === 'employee' && caseItem.employeeId?.toString() === req.user.id);
+
+        if (!isAuthorized) {
+            return res.status(403).json({
+                success: false,
+                error: 'Not authorized to view this case'
+            });
+        }
+
+        const service = caseItem.serviceId;
+
+        // Check if service has documentsRequired
+        if (!service.documentsRequired || service.documentsRequired.length === 0) {
+            return res.status(200).json({
+                success: true,
+                data: [],
+                message: 'No required documents defined for this service'
+            });
+        }
+
+        // Get document status
+        const documentStatus = await DocumentVersion.getDocumentStatus(
+            caseId,
+            service.documentsRequired
+        );
+
+        // Calculate summary statistics
+        const totalDocuments = documentStatus.length;
+        const uploadedDocuments = documentStatus.filter(doc => doc.isUploaded).length;
+        const verified = documentStatus.filter(doc => doc.isUploaded && doc.latestVersion.verificationStatus === 'verified').length;
+        const pending = documentStatus.filter(doc => doc.isUploaded && doc.latestVersion.verificationStatus === 'pending').length;
+        const rejected = documentStatus.filter(doc => doc.isUploaded && doc.latestVersion.verificationStatus === 'rejected').length;
+
+        res.status(200).json({
+            success: true,
+            data: documentStatus,
+            summary: {
+                totalDocuments,
+                uploadedDocuments,
+                verified,
+                pending,
+                rejected,
+                allDocumentsUploaded: uploadedDocuments === totalDocuments
+            }
         });
     } catch (err) {
         next(err);
