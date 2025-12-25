@@ -11,22 +11,22 @@ const { calculateAgentPerformance } = require('../utils/helpers');
 exports.getDashboard = async (req, res, next) => {
   try {
     const agentId = req.user.id;
-    
+
     // Get onboarded users
     const onboardedUsers = await User.find({ agentId });
-    
+
     // Get completed cases for onboarded users
     const completedCases = await Case.find({
       endUserId: { $in: onboardedUsers.map(u => u._id) },
       status: constants.CASE_STATUS.COMPLETED
     });
-    
+
     // Get cases in progress for onboarded users
     const inProgressCases = await Case.find({
       endUserId: { $in: onboardedUsers.map(u => u._id) },
       status: constants.CASE_STATUS.IN_PROGRESS
     });
-    
+
     // Calculate performance metrics
     const performance = {
       onboardedUsers: onboardedUsers.length,
@@ -34,22 +34,22 @@ exports.getDashboard = async (req, res, next) => {
       inProgressCases: inProgressCases.length,
       conversionRate: calculateAgentPerformance(onboardedUsers.length, completedCases.length)
     };
-    
+
     // Get monthly stats
     const currentMonth = new Date();
     currentMonth.setDate(1);
-    
+
     const monthlyOnboarded = await User.find({
       agentId,
       createdAt: { $gte: currentMonth }
     });
-    
+
     const monthlyCompleted = await Case.find({
       endUserId: { $in: onboardedUsers.map(u => u._id) },
       status: constants.CASE_STATUS.COMPLETED,
       completedAt: { $gte: currentMonth }
     });
-    
+
     res.status(200).json({
       success: true,
       data: {
@@ -72,35 +72,35 @@ exports.getOnboardedUsers = async (req, res, next) => {
   try {
     const agentId = req.user.id;
     const { page = 1, limit = 10, status } = req.query;
-    
+
     const query = { agentId };
-    
+
     // Get onboarded users
     const users = await User.find(query)
       .skip((page - 1) * limit)
       .limit(parseInt(limit))
       .sort({ createdAt: -1 });
-    
+
     const total = await User.countDocuments(query);
-    
+
     // Get case status for each user
     const usersWithCaseStatus = [];
-    
+
     for (const user of users) {
       const cases = await Case.find({ endUserId: user._id });
-      
+
       let caseStatus = 'no_case';
       if (cases.length > 0) {
         const latestCase = cases.sort((a, b) => b.createdAt - a.createdAt)[0];
         caseStatus = latestCase.status;
       }
-      
+
       usersWithCaseStatus.push({
         ...user.toObject(),
         caseStatus
       });
     }
-    
+
     res.status(200).json({
       success: true,
       count: usersWithCaseStatus.length,
@@ -123,7 +123,7 @@ exports.createEndUser = async (req, res, next) => {
   try {
     const agentId = req.user.id;
     const { name, email, password, phone, serviceId } = req.body;
-    
+
     // Create end user
     const endUser = await User.create({
       name,
@@ -134,10 +134,10 @@ exports.createEndUser = async (req, res, next) => {
       sourceTag: constants.SOURCE_TAGS.AGENT,
       agentId
     });
-    
+
     // Create notification for admin
     const admins = await User.find({ role: constants.USER_ROLES.ADMIN });
-    
+
     for (const admin of admins) {
       await Notification.create({
         recipientId: admin._id,
@@ -147,12 +147,12 @@ exports.createEndUser = async (req, res, next) => {
         relatedCaseId: null
       });
     }
-    
+
     // If serviceId is provided, create a case
     let caseItem = null;
     if (serviceId) {
       const service = await Service.findById(serviceId);
-      
+
       if (service) {
         caseItem = await Case.create({
           caseId: `CASE-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`.toUpperCase(),
@@ -160,7 +160,7 @@ exports.createEndUser = async (req, res, next) => {
           serviceId,
           status: constants.CASE_STATUS.NEW
         });
-        
+
         // Create notification for admin about new case
         for (const admin of admins) {
           await Notification.create({
@@ -173,7 +173,7 @@ exports.createEndUser = async (req, res, next) => {
         }
       }
     }
-    
+
     res.status(201).json({
       success: true,
       data: {
@@ -192,7 +192,7 @@ exports.createEndUser = async (req, res, next) => {
 exports.getServices = async (req, res, next) => {
   try {
     const services = await Service.find({ isActive: true }).sort({ name: 1 });
-    
+
     res.status(200).json({
       success: true,
       count: services.length,
@@ -261,11 +261,11 @@ exports.getReports = async (req, res, next) => {
     const caseDateFilter =
       startDate && endDate && !isNaN(new Date(startDate)) && !isNaN(new Date(endDate))
         ? {
-            completedAt: {
-              $gte: new Date(startDate),
-              $lte: new Date(endDate)
-            }
+          completedAt: {
+            $gte: new Date(startDate),
+            $lte: new Date(endDate)
           }
+        }
         : {};
 
     const completedCases = await Case.find({
@@ -273,15 +273,15 @@ exports.getReports = async (req, res, next) => {
       status: constants.CASE_STATUS.COMPLETED,
       ...caseDateFilter
     });
-    
+
     // Get monthly stats for the last 6 months
     const monthlyStats = [];
     const currentDate = new Date();
-    
+
     for (let i = 5; i >= 0; i--) {
       const month = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
       const nextMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - i + 1, 1);
-      
+
       const monthlyOnboarded = await User.find({
         agentId,
         createdAt: {
@@ -289,7 +289,7 @@ exports.getReports = async (req, res, next) => {
           $lt: nextMonth
         }
       });
-      
+
       const monthlyCompleted = await Case.find({
         endUserId: { $in: allOnboardedUsers.map(u => u._id) },
         status: constants.CASE_STATUS.COMPLETED,
@@ -298,14 +298,14 @@ exports.getReports = async (req, res, next) => {
           $lt: nextMonth
         }
       });
-      
+
       monthlyStats.push({
         month: month.toLocaleString('default', { month: 'short', year: 'numeric' }),
         onboarded: monthlyOnboarded.length,
         completed: monthlyCompleted.length
       });
     }
-    
+
     res.status(200).json({
       success: true,
       data: {
@@ -325,3 +325,92 @@ exports.getReports = async (req, res, next) => {
 
 
 
+
+// @desc    Get notifications
+// @route   GET /api/agent/notifications
+// @access  Private/Agent
+exports.getNotifications = async (req, res, next) => {
+  try {
+    const agentId = req.user.id;
+    const { page = 1, limit = 10, isRead } = req.query;
+
+    const query = { recipientId: agentId };
+    if (isRead !== undefined) query.isRead = isRead === 'true';
+
+    const notifications = await Notification.find(query)
+      .populate('relatedCaseId', 'caseId')
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit))
+      .sort({ createdAt: -1 });
+
+    const total = await Notification.countDocuments(query);
+
+    res.status(200).json({
+      success: true,
+      count: notifications.length,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total
+      },
+      data: notifications
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Mark notification as read
+// @route   PUT /api/agent/notifications/:id/read
+// @access  Private/Agent
+exports.markNotificationAsRead = async (req, res, next) => {
+  try {
+    const notification = await Notification.findById(req.params.id);
+
+    if (!notification) {
+      return res.status(404).json({
+        success: false,
+        error: 'Notification not found'
+      });
+    }
+
+    // Check if notification belongs to current agent
+    if (notification.recipientId.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        error: 'Not authorized to update this notification'
+      });
+    }
+
+    notification.isRead = true;
+    await notification.save();
+
+    res.status(200).json({
+      success: true,
+      data: notification
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Mark all notifications as read
+// @route   PUT /api/agent/notifications/read-all
+// @access  Private/Agent
+exports.markAllNotificationsAsRead = async (req, res, next) => {
+  try {
+    const agentId = req.user.id;
+
+    await Notification.updateMany(
+      { recipientId: agentId, isRead: false },
+      { isRead: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'All notifications marked as read'
+    });
+  } catch (err) {
+    next(err);
+  }
+};

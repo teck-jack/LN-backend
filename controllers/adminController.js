@@ -798,3 +798,92 @@ exports.getTimeline = async (req, res, next) => {
     next(err);
   }
 };
+
+// @desc    Get notifications
+// @route   GET /api/admin/notifications
+// @access  Private/Admin
+exports.getNotifications = async (req, res, next) => {
+  try {
+    const adminId = req.user.id;
+    const { page = 1, limit = 10, isRead } = req.query;
+
+    const query = { recipientId: adminId };
+    if (isRead !== undefined) query.isRead = isRead === 'true';
+
+    const notifications = await Notification.find(query)
+      .populate('relatedCaseId', 'caseId')
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit))
+      .sort({ createdAt: -1 });
+
+    const total = await Notification.countDocuments(query);
+
+    res.status(200).json({
+      success: true,
+      count: notifications.length,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total
+      },
+      data: notifications
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Mark notification as read
+// @route   PUT /api/admin/notifications/:id/read
+// @access  Private/Admin
+exports.markNotificationAsRead = async (req, res, next) => {
+  try {
+    const notification = await Notification.findById(req.params.id);
+
+    if (!notification) {
+      return res.status(404).json({
+        success: false,
+        error: 'Notification not found'
+      });
+    }
+
+    // Check if notification belongs to current admin
+    if (notification.recipientId.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        error: 'Not authorized to update this notification'
+      });
+    }
+
+    notification.isRead = true;
+    await notification.save();
+
+    res.status(200).json({
+      success: true,
+      data: notification
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Mark all notifications as read
+// @route   PUT /api/admin/notifications/read-all
+// @access  Private/Admin
+exports.markAllNotificationsAsRead = async (req, res, next) => {
+  try {
+    const adminId = req.user.id;
+
+    await Notification.updateMany(
+      { recipientId: adminId, isRead: false },
+      { isRead: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'All notifications marked as read'
+    });
+  } catch (err) {
+    next(err);
+  }
+};

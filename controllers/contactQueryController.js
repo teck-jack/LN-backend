@@ -34,6 +34,26 @@ exports.submitQuery = async (req, res) => {
 
         const contactQuery = await ContactQuery.create(queryData);
 
+        // Notify all admins about the new query
+        const Notification = require('../models/Notification');
+        const constants = require('../utils/constants');
+
+        // Find all admins
+        const admins = await User.find({ role: constants.USER_ROLES.ADMIN });
+
+        // Create notification for each admin
+        const notificationPromises = admins.map(admin =>
+            Notification.create({
+                recipientId: admin._id,
+                type: constants.NOTIFICATION_TYPES.IN_APP,
+                title: 'New Contact Query',
+                message: `New query received from ${name}: "${query.substring(0, 50)}${query.length > 50 ? '...' : ''}"`,
+                relatedCaseId: null
+            })
+        );
+
+        await Promise.all(notificationPromises);
+
         res.status(201).json({
             success: true,
             data: contactQuery,

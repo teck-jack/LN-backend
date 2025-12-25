@@ -18,7 +18,10 @@ const {
   getReports,
   getRequiredDocuments,
   addNote,
-  getTimeline
+  getTimeline,
+  getNotifications,
+  markNotificationAsRead,
+  markAllNotificationsAsRead
 } = require('../controllers/adminController');
 const { adminAuth } = require('../middleware/adminAuth');
 
@@ -45,5 +48,10 @@ router.post('/services', createService);
 router.put('/services/:id', updateService);
 router.get('/services', getServices);
 router.get('/reports', getReports);
+
+// Notification routes
+router.get('/notifications', getNotifications);
+router.put('/notifications/:id/read', markNotificationAsRead);
+router.put('/notifications/read-all', markAllNotificationsAsRead);
 
 module.exports = router;
