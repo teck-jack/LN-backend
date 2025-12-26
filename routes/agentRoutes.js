@@ -22,6 +22,8 @@ router.post('/users', createEndUser);
 router.get('/services', getServices);
 router.get('/services/:id', getServiceById);
 
+router.get('/reports', getReports);
+
 // Notification routes
 router.get('/notifications', getNotifications);
 router.put('/notifications/:id/read', markNotificationAsRead);
